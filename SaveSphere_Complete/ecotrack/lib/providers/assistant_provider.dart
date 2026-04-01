@@ -11,6 +11,7 @@ import '../services/ai/suggestion_engine.dart';
 import '../services/ai/response_builder.dart';
 import '../services/ai/context_manager.dart';
 import '../services/voice_service.dart';
+import '../services/gemini_service.dart';
 import 'theme_provider.dart';
 import 'energy_provider.dart';
 import 'water_provider.dart';
@@ -33,6 +34,7 @@ class ChatMessage {
 class AssistantProvider extends ChangeNotifier {
   final SpeechToText _speechToText = SpeechToText();
   final VoiceService _voiceService = VoiceService();
+  final GeminiService _geminiService = GeminiService();
   
   bool _isSpeechSupported = false;
   bool get isSpeechSupported => _isSpeechSupported;
@@ -189,127 +191,90 @@ class AssistantProvider extends ChangeNotifier {
     _state = 'processing';
     notifyListeners();
 
-    // 1. Time Parsing
-    final timeRef = parseTimeReference(query);
-
-    // 2. Intent Detection
+    // 1. Intent Detection (still needed for app-level actions like theme/power control)
     final intentRes = detectIntent(query);
     final intent = intentRes.intent;
     final confidence = intentRes.confidence;
+    final timeRef = parseTimeReference(query);
 
-    // 3. Merging with Context (Checking Expiry FIRST)
     final isExpired = isContextExpired(_context);
     Intent activeIntent = intent;
     if (intent == Intent.unknown && _context.lastIntent != null && confidence < 0.3 && !isExpired) {
-        activeIntent = _context.lastIntent!;
+      activeIntent = _context.lastIntent!;
     }
 
-    // 4 & 5. Data & Anomaly Engine
     final severity = detectAnomaly(data);
-
-    // Topic Modifier detection (e.g. least vs most, dark vs light, daily vs monthly)
-    String? topicModifier;
     final lowerMsg = query.toLowerCase();
-    if (lowerMsg.contains("least") || lowerMsg.contains("less")) {
-        topicModifier = "least";
-    } else if (activeIntent == Intent.comparison) {
-        if (lowerMsg.contains("yesterday") || lowerMsg.contains("today") || lowerMsg.contains("daily") || lowerMsg.contains("day")) {
-            topicModifier = "daily";
-        } else if (lowerMsg.contains("week")) {
-            topicModifier = "weekly";
-        } else {
-            topicModifier = "monthly";
-        }
-    } else if (activeIntent == Intent.themeChange) {
-        if (lowerMsg.contains("dark")) topicModifier = "dark";
-        else if (lowerMsg.contains("light")) topicModifier = "light";
-        else topicModifier = "system";
+    String? topicModifier;
+
+    // Handle app-level side effects (theme & power control) BEFORE Gemini
+    if (activeIntent == Intent.themeChange) {
+      if (lowerMsg.contains("dark")) topicModifier = "dark";
+      else if (lowerMsg.contains("light")) topicModifier = "light";
+      else topicModifier = "system";
     } else if (activeIntent == Intent.powerControl) {
-        final isOff = lowerMsg.contains("off") || lowerMsg.contains("shutdown") || lowerMsg.contains("disable");
-        final isOn = lowerMsg.contains("on") || lowerMsg.contains("enable");
-        final state = !isOff; // Default to on if not explicitly off
-
-        bool targetAll = lowerMsg.contains("all") || lowerMsg.contains("everything") ||
-            (!lowerMsg.contains("bedroom") && !lowerMsg.contains("living") && !lowerMsg.contains("kitchen"));
-
-        if (targetAll) {
-            await energyProvider.toggleRoom('bedroom', state);
-            await energyProvider.toggleRoom('living', state);
-            await energyProvider.toggleRoom('kitchen', state);
-            topicModifier = state ? "all_on" : "all_off";
-        } else if (lowerMsg.contains("bedroom")) {
-            await energyProvider.toggleRoom('bedroom', state);
-            topicModifier = state ? "bedroom_on" : "bedroom_off";
-        } else if (lowerMsg.contains("living")) {
-            await energyProvider.toggleRoom('living', state);
-            topicModifier = state ? "living_on" : "living_off";
-        } else if (lowerMsg.contains("kitchen")) {
-            await energyProvider.toggleRoom('kitchen', state);
-            topicModifier = state ? "kitchen_on" : "kitchen_off";
-        }
-    }
-
-    // 6. Response Construction & enforce wording limits
-    bool hasDomainWord = RegExp(r'(energy|water|power|electricity|electric|bill|usage|consume|unit|kwh|appliance|light|ac|cost|charge|room|kitchen|bedroom|living room)', caseSensitive: false).hasMatch(lowerMsg);
-
-    bool isPattern = lowerMsg.contains("pattern") || lowerMsg.contains("behaviour") || lowerMsg.contains("behavior");
-    bool isOptimization = (lowerMsg.contains("reduce") || lowerMsg.contains("save") || lowerMsg.contains("tips") || lowerMsg.contains("optimize") || lowerMsg.contains("optimization")) && hasDomainWord;
-    bool isSimulation = (lowerMsg.contains("what if") || lowerMsg.contains("reduce by") || lowerMsg.contains("simulate")) && hasDomainWord;
-    bool isPrediction = (lowerMsg.contains("predict") || lowerMsg.contains("future"));
-
-    String? currentTopic;
-
-    // CONTEXT AWARENESS: Checking previous queries
-    if (!isPattern && !isOptimization && !isSimulation && !isPrediction && !isExpired) {
-      if (_context.lastTopic == "simulation" && (lowerMsg.contains("%") || lowerMsg.contains("percent") || RegExp(r'\d+').hasMatch(lowerMsg))) {
-         isSimulation = true;
-      } else if (_context.lastTopic == "pattern" && (lowerMsg.contains("what about") || lowerMsg.contains("and"))) {
-         isPattern = true;
+      final isOff = lowerMsg.contains("off") || lowerMsg.contains("shutdown") || lowerMsg.contains("disable");
+      final state = !isOff;
+      bool targetAll = lowerMsg.contains("all") || lowerMsg.contains("everything") ||
+          (!lowerMsg.contains("bedroom") && !lowerMsg.contains("living") && !lowerMsg.contains("kitchen"));
+      if (targetAll) {
+        await energyProvider.toggleRoom('bedroom', state);
+        await energyProvider.toggleRoom('living', state);
+        await energyProvider.toggleRoom('kitchen', state);
+        topicModifier = state ? "all_on" : "all_off";
+      } else if (lowerMsg.contains("bedroom")) {
+        await energyProvider.toggleRoom('bedroom', state);
+        topicModifier = state ? "bedroom_on" : "bedroom_off";
+      } else if (lowerMsg.contains("living")) {
+        await energyProvider.toggleRoom('living', state);
+        topicModifier = state ? "living_on" : "living_off";
+      } else if (lowerMsg.contains("kitchen")) {
+        await energyProvider.toggleRoom('kitchen', state);
+        topicModifier = state ? "kitchen_on" : "kitchen_off";
       }
     }
 
-    String text;
-    bool isWaterQuery = lowerMsg.contains("water") || lowerMsg.contains("liters") || lowerMsg.contains("lpm") || lowerMsg.contains("tank") || lowerMsg.contains("drain");
+    // 2. Build energy & water context maps for Gemini
+    final energyContext = <String, dynamic>{
+      'totalPower': data.totalPower.toStringAsFixed(1),
+      'bedroomOn': data.rooms['bedroom']?.isOn ?? false,
+      'bedroomPower': data.rooms['bedroom']?.currentPower.toStringAsFixed(1) ?? '0',
+      'livingOn': data.rooms['living']?.isOn ?? false,
+      'livingPower': data.rooms['living']?.currentPower.toStringAsFixed(1) ?? '0',
+      'kitchenOn': data.rooms['kitchen']?.isOn ?? false,
+      'kitchenPower': data.rooms['kitchen']?.currentPower.toStringAsFixed(1) ?? '0',
+      'todayKwh': data.dailyConsumption.toStringAsFixed(2),
+      'monthKwh': data.monthlyConsumption.toStringAsFixed(2),
+      'estimatedBill': data.estimatedBill.toStringAsFixed(2),
+    };
 
-    if (activeIntent == Intent.unknown && !hasDomainWord && !isPattern && !isOptimization && !isSimulation && !isPrediction) {
+    final wData = waterProvider.waterMetrics;
+    final waterContext = <String, dynamic>{
+      'tankLevel': wData?.tankLevel.toStringAsFixed(1) ?? 'N/A',
+      'flowRate': wData?.flowRate.toStringAsFixed(1) ?? 'N/A',
+      'todayLiters': wData?.dailyUsage.toStringAsFixed(1) ?? 'N/A',
+    };
+
+    // 3. Ask Gemini (primary AI) — with real sensor data
+    String text;
+    try {
+      text = await _geminiService.ask(
+        userQuery: query,
+        energyContext: energyContext,
+        waterContext: waterContext,
+      );
+    } catch (e) {
+      // Fallback to rule-based system if Gemini fails
+      debugPrint('Gemini failed, using fallback: $e');
+      bool hasDomainWord = RegExp(r'(energy|water|power|electricity|electric|bill|usage|consume|unit|kwh|appliance|light|ac|cost|charge|room|kitchen|bedroom|living room)', caseSensitive: false).hasMatch(lowerMsg);
+      bool isWaterQuery = lowerMsg.contains("water") || lowerMsg.contains("liters") || lowerMsg.contains("lpm") || lowerMsg.contains("tank") || lowerMsg.contains("drain");
+      if (activeIntent == Intent.unknown && !hasDomainWord) {
         text = "I only answer questions related to your electricity and water usage. How can I help you manage your consumption today?";
-    } else if (isPattern) {
-        text = handleUsagePatternQuery();
-        currentTopic = "pattern";
-    } else if (isOptimization) {
-        text = handleOptimizationQuery();
-        currentTopic = "optimization";
-    } else if (isSimulation) {
-        text = handleSimulationQuery(lowerMsg);
-        currentTopic = "simulation";
-    } else if (isPrediction) {
-        text = handlePredictionQuery();
-        currentTopic = "prediction";
-    } else {
-        if (isWaterQuery) {
-            final wData = waterProvider.waterMetrics;
-            if (wData != null) {
-                text = buildWaterResponse(
-                  activeIntent,
-                  confidence,
-                  severity,
-                  wData,
-                  timeRef ?? _context.lastTimeReference,
-                  topicModifier,
-                );
-            } else {
-                text = "Water analytics are currently unavailable.";
-            }
-        } else {
-            text = buildResponse(
-              activeIntent,
-              confidence,
-              severity,
-              data,
-              timeRef ?? _context.lastTimeReference,
-              topicModifier,
-            );
-        }
+      } else if (isWaterQuery && wData != null) {
+        text = buildWaterResponse(activeIntent, confidence, severity, wData, timeRef ?? _context.lastTimeReference, topicModifier);
+      } else {
+        text = buildResponse(activeIntent, confidence, severity, data, timeRef ?? _context.lastTimeReference, topicModifier);
+      }
     }
 
     text = trimToWordLimit(text, 75);
