@@ -1,27 +1,38 @@
 # 🌿 SaveSphere — AI-Powered Smart Home Energy & Water Manager
 
-> **Hackathon Project** | Google AI Integration | Flutter + React + Firebase
+> **Hackathon Project** | Google AI Integration | Flutter + React + Firebase + ESP32
 
 ---
 
 ## Problem Statement
 
-Households waste significant electricity and water every day — not because they don't care, but because they have **no real-time visibility** into their consumption. Traditional utility bills arrive monthly, by which time it's too late to change behaviour. Smart meters exist, but lack intelligent, actionable insights in a language users understand.
+Households waste significant electricity and water every day — not because they don't care, but because they have **no real-time visibility** into their consumption. Traditional utility bills arrive monthly, by which time it's too late to change behaviour. Existing smart home systems are either too expensive, too complex, or lack intelligent AI-driven insights in a language users understand.
 
-**SaveSphere solves this** by combining a live home simulation dashboard with a natural-language AI assistant — giving users real-time awareness, predictive billing, and voice-controlled smart home management powered by **Google Gemini AI**.
+**SaveSphere solves this** by building a complete IoT + AI ecosystem:
+- **Hardware layer** — ESP32 microcontrollers with current sensors and flow sensors capture real energy and water data from your actual home.
+- **Simulation layer** — A web-based virtual home lets you demonstrate the full system without physical hardware.
+- **Intelligence layer** — Google Gemini AI analyses live sensor data and answers natural-language questions, predicts bills, and lets you control appliances using your voice.
 
 ---
 
 ## Project Description
 
-SaveSphere is a **full-stack smart home management system** consisting of two connected applications:
+SaveSphere is a **complete IoT smart home management system** that works in two modes:
 
-| Component | Tech Stack | Role |
+| Mode | Data Source | Use Case |
 |---|---|---|
-| **SaveSphere Mobile App** (`SaveSphere_Complete/ecotrack`) | Flutter + Dart | AI assistant, analytics, notifications, billing |
-| **Home Simulation Dashboard** (`buildai_source`) | React + Vite + TypeScript | Real-time appliance simulation, water tank control |
+| **Simulation Mode** | Web Dashboard (React + Vite) | Demo & hackathon — virtual appliances simulate real usage |
+| **Real Home Mode** | ESP32 + Sensors → Firebase | Deployed in an actual home with physical hardware |
 
-Both apps are **connected via Firebase Realtime Database** — the web simulator acts as the "smart home sensor", and the Flutter app reads that live data to power its insights and AI responses.
+The system has three layers:
+
+| Layer | Component | Tech Stack |
+|---|---|---|
+| **Hardware** | ESP32 + Current Sensors + Flow Sensors | C++ (Arduino), MQTT/HTTP → Firebase |
+| **Simulation** | Home Simulation Dashboard | React, Vite, TypeScript |
+| **App** | SaveSphere Mobile App | Flutter, Dart, Gemini AI |
+
+All data — whether from real sensors or the virtual simulator — flows into **Firebase Realtime Database**, which the Flutter app reads to power its analytics and Gemini AI assistant.
 
 ---
 
@@ -106,30 +117,177 @@ Gemini also maintains **chat history** across the session so follow-up questions
 
 ---
 
+## 🔌 Real Home Hardware Implementation
+
+In a real home deployment, the web simulation dashboard is **replaced by physical IoT hardware**. The Firebase Realtime Database remains the central data hub — no changes needed in the Flutter app.
+
+### Hardware Components
+
+| Component | Purpose | Details |
+|---|---|---|
+| **ESP32 Microcontroller** | Central hub — reads sensors, posts to Firebase, receives control commands | Wi-Fi enabled, runs 24/7 |
+| **Current Sensors (SCT-013)** | Measures electricity consumption per circuit | Clamp-on, non-invasive — placed on live wires for Bedroom, Living Room, Kitchen |
+| **Flow Sensors (YF-S201)** | Measures water flow rate (L/min) | Installed on outlet pipes — Kitchen, Washroom 1, Washroom 2 |
+| **Relay Module** | Controls appliances remotely | Receives ON/OFF commands from Firebase, switches mains-connected appliances |
+| **Water Level Sensor** | Monitors overhead tank | Float sensor or ultrasonic sensor to measure tank level |
+
+### How It Works — Real Home Data Flow
+
+```
+🏠 Real Home
+│
+├── 🔌 Current Sensors (SCT-013)
+│    ├── Bedroom circuit  ──────────────┐
+│    ├── Living Room circuit ───────────┤
+│    └── Kitchen circuit  ─────────────┤
+│                                      │
+├── 💧 Flow Sensors (YF-S201)          │
+│    ├── Kitchen outlet   ─────────────┤
+│    ├── Washroom 1 outlet ────────────┤
+│    └── Washroom 2 outlet ────────────┤
+│                                      ▼
+├── 🌊 Tank Level Sensor  ──────► ESP32 Microcontroller
+│                                  (reads all sensors,
+│                                   calculates kW & L/min)
+│                                      │
+│                                      ▼ HTTP POST
+│                              Firebase Realtime DB
+│                              /users/{id}/energy/live
+│                              /users/{id}/water/live
+│                                      │
+│                    ┌─────────────────┴──────────────────┐
+│                    ▼                                    ▼
+│           SaveSphere Flutter App               ESP32 listens for
+│           (reads data, runs Gemini AI,         control commands at
+│            shows charts, notifies user)        /users/{id}/control
+│                    │                                    │
+│                    └──── User taps or says ─────────────┘
+│                          "Turn off kitchen"  ──► Firebase ──► ESP32 ──► Relay OFF
+```
+
+### Sensor Data → Firebase Schema
+
+The ESP32 pushes the following structure to Firebase every 60 seconds (and immediately on change):
+
+```json
+{
+  "users": {
+    "user1": {
+      "energy": {
+        "live": {
+          "timestamp": "2026-04-01 07:00:00",
+          "power": {
+            "bedroom": 290,
+            "livingRoom": 170,
+            "kitchen": 1500,
+            "total": 1960
+          },
+          "energy": {
+            "bedroom": 12.4,
+            "livingRoom": 8.1,
+            "kitchen": 45.2
+          },
+          "switches": {
+            "bedroom": true,
+            "lrLight": true,
+            "lrTV": false,
+            "kitchen": true
+          }
+        }
+      },
+      "water": {
+        "live": {
+          "timestamp": "2026-04-01 07:00:00",
+          "tankLevel": 720.5,
+          "flowRate": 60.0,
+          "motorStatus": false,
+          "sections": {
+            "kitchen": 60,
+            "washroom1": 0,
+            "washroom2": 0
+          }
+        }
+      },
+      "control": {
+        "bedroom": true,
+        "lrLight": true,
+        "lrTV": false,
+        "kitchen": true
+      }
+    }
+  }
+}
+```
+
+### Remote Control — App & Voice
+
+The system supports **two-way communication** — not just monitoring but full remote control:
+
+#### 📱 App Control
+- Tap room icons on the Home screen to toggle rooms ON/OFF
+- The app writes to `users/{id}/control` in Firebase
+- The ESP32 listens to this node 24/7 using Firebase streaming and triggers the relay module
+- UI updates **instantly** (optimistic update), then confirms via Firebase
+
+#### 🎙️ Voice Control (via Gemini AI Assistant)
+Users can speak natural commands to control their home:
+
+| Voice Command | Action |
+|---|---|
+| *"Turn off the kitchen"* | Sends OFF command to kitchen relay via Firebase |
+| *"Switch on the bedroom"* | Sends ON command to bedroom relay via Firebase |
+| *"Turn off everything"* | Sends OFF to all rooms simultaneously |
+| *"Turn on all lights"* | Sends ON to all rooms |
+| *"What is my current power usage?"* | Gemini reads live sensor data and responds |
+| *"What will my bill be this month?"* | Gemini calculates from kWh + tariff slab |
+| *"How much water has been used today?"* | Gemini reads flow sensor total |
+| *"Switch to dark mode"* | Changes app theme |
+
+All control commands are handled by the `AssistantProvider` — it detects intent, executes the action, and then asks Gemini to generate a natural confirmation response.
+
+---
+
 ## System Architecture
+
+### Simulation Mode (Hackathon Demo)
 
 ```
 ┌─────────────────────────────────┐       ┌──────────────────────────────┐
 │   Home Simulation (Web App)     │       │   SaveSphere (Flutter App)   │
 │   React + Vite + TypeScript     │       │   Dart + Flutter             │
 │                                 │       │                              │
-│  ┌─────────┐  ┌──────────────┐  │       │  ┌────────────────────────┐  │
-│  │ Appliance│  │  Water Tank  │  │──────▶│  │  EnergyDataProvider    │  │
-│  │ Toggles  │  │  Simulation  │  │       │  │  WaterDataProvider     │  │
-│  └─────────┘  └──────────────┘  │       │  └────────────────────────┘  │
-│         │            │          │       │             │                 │
-│         ▼            ▼          │       │             ▼                 │
-│   ┌─────────────────────────┐   │       │  ┌────────────────────────┐  │
-│   │  Firebase Realtime DB   │◀──┼───────┼─▶│  GeminiService         │  │
-│   │  (Live + Log nodes)     │   │       │  │  (Gemini 1.5 Flash)    │  │
-│   └─────────────────────────┘   │       │  └────────────────────────┘  │
-└─────────────────────────────────┘       │             │                 │
-                                          │             ▼                 │
-                                          │  ┌────────────────────────┐  │
-                                          │  │  Voice Assistant UI     │  │
-                                          │  │  Charts & Analytics     │  │
-                                          │  └────────────────────────┘  │
+│  Appliance Toggles              │──────▶│  EnergyDataProvider          │
+│  Water Tank Simulation          │       │  WaterDataProvider           │
+│         │                       │       │         │                    │
+│         ▼                       │       │         ▼                    │
+│   Firebase Realtime DB   ◀──────┼───────┼──▶ GeminiService             │
+│   (Live + Log nodes)            │       │   (Gemini 1.5 Flash)         │
+└─────────────────────────────────┘       │         │                    │
+                                          │         ▼                    │
+                                          │  Voice Assistant + Charts    │
                                           └──────────────────────────────┘
+```
+
+### Real Home Mode (Production)
+
+```
+┌─────────────────────────────────┐       ┌──────────────────────────────┐
+│   Physical Home Hardware        │       │   SaveSphere (Flutter App)   │
+│                                 │       │   Dart + Flutter             │
+│  Current Sensors (SCT-013)      │       │                              │
+│  Flow Sensors (YF-S201)         │──────▶│  EnergyDataProvider          │
+│  Tank Level Sensor              │       │  WaterDataProvider           │
+│  ESP32 Microcontroller          │       │         │                    │
+│  Relay Module                   │       │         ▼                    │
+│         │                  ◀────┼───────┼── GeminiService + Voice AI   │
+│         ▼                       │       │         │                    │
+│   Firebase Realtime DB   ◀──────┼───────┼──▶ Remote Control Commands   │
+│   (bi-directional sync)         │       │   (App toggle / Voice cmd)   │
+└─────────────────────────────────┘       └──────────────────────────────┘
+                  ▲
+       ESP32 reads /control node
+       and fires relay to switch
+       physical appliances ON/OFF
 ```
 
 ---
@@ -224,14 +382,20 @@ Both apps connect to the same Firebase Realtime Database. Update the Firebase co
 
 | Layer | Technology |
 |---|---|
-| Mobile App | Flutter, Dart |
-| Web Simulator | React, Vite, TypeScript, TailwindCSS |
-| AI | Google Gemini 1.5 Flash |
-| Database | Firebase Realtime Database |
-| Charts | fl_chart (Flutter) |
-| Voice | flutter_tts, speech_to_text |
-| State Management | Provider (Flutter) |
-| Notifications | flutter_local_notifications |
+| **Mobile App** | Flutter, Dart |
+| **Web Simulator** | React, Vite, TypeScript, TailwindCSS |
+| **AI (Language Model)** | Google Gemini 1.5 Flash |
+| **Database & Sync** | Firebase Realtime Database |
+| **IoT Microcontroller** | ESP32 (Wi-Fi enabled, Arduino C++) |
+| **Energy Sensing** | SCT-013 Non-Invasive Current Sensors |
+| **Water Sensing** | YF-S201 Hall Effect Flow Sensors |
+| **Appliance Control** | Relay Module (controlled via ESP32) |
+| **Water Tank** | Ultrasonic / Float Level Sensor |
+| **Charts** | fl_chart (Flutter) |
+| **Voice Input** | speech_to_text (Flutter) |
+| **Voice Output** | flutter_tts (Flutter) |
+| **State Management** | Provider (Flutter) |
+| **Notifications** | flutter_local_notifications |
 
 ---
 
