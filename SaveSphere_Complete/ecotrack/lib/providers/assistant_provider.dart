@@ -236,23 +236,23 @@ class AssistantProvider extends ChangeNotifier {
 
     // 2. Build energy & water context maps for Gemini
     final energyContext = <String, dynamic>{
-      'totalPower': data.totalPower.toStringAsFixed(1),
-      'bedroomOn': data.rooms['bedroom']?.isOn ?? false,
-      'bedroomPower': data.rooms['bedroom']?.currentPower.toStringAsFixed(1) ?? '0',
-      'livingOn': data.rooms['living']?.isOn ?? false,
-      'livingPower': data.rooms['living']?.currentPower.toStringAsFixed(1) ?? '0',
-      'kitchenOn': data.rooms['kitchen']?.isOn ?? false,
-      'kitchenPower': data.rooms['kitchen']?.currentPower.toStringAsFixed(1) ?? '0',
-      'todayKwh': data.dailyConsumption.toStringAsFixed(2),
-      'monthKwh': data.monthlyConsumption.toStringAsFixed(2),
-      'estimatedBill': data.estimatedBill.toStringAsFixed(2),
+      'totalPower': (data.currentPowerKw * 1000).toStringAsFixed(1),
+      'bedroomOn': data.rooms.bedroomPowerW > 0,
+      'bedroomPower': data.rooms.bedroomPowerW.toStringAsFixed(1),
+      'livingOn': data.rooms.livingRoomPowerW > 0,
+      'livingPower': data.rooms.livingRoomPowerW.toStringAsFixed(1),
+      'kitchenOn': data.rooms.kitchenPowerW > 0,
+      'kitchenPower': data.rooms.kitchenPowerW.toStringAsFixed(1),
+      'todayKwh': data.todayUsageKwh.toStringAsFixed(2),
+      'monthKwh': data.monthlyTotalKwh.toStringAsFixed(2),
+      'estimatedBill': (data.estimatedMonthlyUnits * 6.0).toStringAsFixed(2),
     };
 
     final wData = waterProvider.waterMetrics;
     final waterContext = <String, dynamic>{
       'tankLevel': wData?.tankLevel.toStringAsFixed(1) ?? 'N/A',
-      'flowRate': wData?.flowRate.toStringAsFixed(1) ?? 'N/A',
-      'todayLiters': wData?.dailyUsage.toStringAsFixed(1) ?? 'N/A',
+      'flowRate': wData?.currentFlowLpm.toStringAsFixed(1) ?? 'N/A',
+      'todayLiters': wData?.todayUsageL.toStringAsFixed(1) ?? 'N/A',
     };
 
     // 3. Ask Gemini (primary AI) — with real sensor data
@@ -288,8 +288,8 @@ class AssistantProvider extends ChangeNotifier {
 
     // 8. Update context
     _context = updateContext(_context, activeIntent, timeRef);
-    if (currentTopic != null) {
-      _context.lastTopic = currentTopic;
+    if (topicModifier != null) {
+      _context.lastTopic = topicModifier;
     }
 
     String? action;
