@@ -546,7 +546,6 @@ The following features are **planned but not yet implemented** in the current ve
 |---|---|---|
 | **Multi-User / Multi-Room Dashboard** | A single admin view showing all users/blocks/floors in one screen (for hostels, colleges) | 🔜 Planned 
 | **Daytime Leak Detection** | Detect abnormally long uninterrupted flow even during the day (e.g. a tap left running for 2+ hours) and alert the user | 🔜 Planned |
-| **PDF / CSV Report Export** | Monthly energy & water usage reports exportable as PDF or spreadsheet | 🔜 Planned |
 | **Google Calendar Integration** | Import schedules to predict peak hours (exam days, holidays) and pre-adjust usage targets | 🔜 Planned |
 | **Offline Mode** | App works without internet — logs data locally and syncs when back online | 🔜 Planned |
 | **Wear OS / Widget Support** | Quick glance at live usage from a smartwatch or home-screen widget | 🔜 Planned |
