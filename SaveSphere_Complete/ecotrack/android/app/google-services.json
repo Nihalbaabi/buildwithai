@@ -1,0 +1,30 @@
+{
+    "project_info": {
+        "project_number": "1043700479151",
+        "firebase_url": "https://eco-track-e75ad-default-rtdb.asia-southeast1.firebasedatabase.app",
+        "project_id": "eco-track-e75ad",
+        "storage_bucket": "eco-track-e75ad.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:1043700479151:web:f04ff956d246658a58d05a",
+                "android_client_info": {
+                    "package_name": "com.example.ecotrack"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyDC0PuenM-vzg9KvpRI_AvhlLHf4cdzKeo"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}
