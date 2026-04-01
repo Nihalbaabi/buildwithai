@@ -544,8 +544,7 @@ The following features are **planned but not yet implemented** in the current ve
 
 | Feature | Description | Status |
 |---|---|---|
-| **Multi-User / Multi-Room Dashboard** | A single admin view showing all users/blocks/floors in one screen (for hostels, colleges) | 🔜 Planned |
-| **Sleep Mode — Smart Leak Detection** | Enable sleep mode on the water dashboard; if any section (Kitchen/Washroom 1/Washroom 2) shows continuous flow beyond its configured time limit (e.g. 30 min for washrooms at night), the app fires a room-specific leak alert — *"Continuous flow from Washroom 1 for 45 min — possible leak!"* | 🔜 Planned |
+| **Multi-User / Multi-Room Dashboard** | A single admin view showing all users/blocks/floors in one screen (for hostels, colleges) | 🔜 Planned 
 | **Daytime Leak Detection** | Detect abnormally long uninterrupted flow even during the day (e.g. a tap left running for 2+ hours) and alert the user | 🔜 Planned |
 | **PDF / CSV Report Export** | Monthly energy & water usage reports exportable as PDF or spreadsheet | 🔜 Planned |
 | **Google Calendar Integration** | Import schedules to predict peak hours (exam days, holidays) and pre-adjust usage targets | 🔜 Planned |
